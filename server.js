@@ -7,6 +7,7 @@ const app = express();
 
 app.use(cors());
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
 
 const client = twilio(
   process.env.TWILIO_SID,
@@ -22,7 +23,10 @@ app.post("/send-sms", async (req, res) => {
     const { to, message } = req.body;
 
     if (!to || !message) {
-      return res.status(400).json({ success: false, error: "Missing to or message." });
+      return res.status(400).json({
+        success: false,
+        error: "Missing to or message."
+      });
     }
 
     const msg = await client.messages.create({
@@ -31,13 +35,34 @@ app.post("/send-sms", async (req, res) => {
       to
     });
 
-    res.json({ success: true, sid: msg.sid });
+    res.json({
+      success: true,
+      sid: msg.sid
+    });
+
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
 });
 
+app.post("/incoming-sms", (req, res) => {
+  console.log("INBOUND SMS:", req.body);
+
+  const twiml = new twilio.twiml.MessagingResponse();
+
+  twiml.message(
+    "U.S. Truck Dispatch received your message. Reply STOP to unsubscribe or HELP for assistance."
+  );
+
+  res.type("text/xml");
+  res.send(twiml.toString());
+});
+
 const port = process.env.PORT || 3000;
+
 app.listen(port, () => {
   console.log("Tracker SMS bridge running on port " + port);
 });
