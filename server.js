@@ -15,16 +15,43 @@ const client = twilio(
 );
 
 /*
-  PHASE 1 INBOUND REPLIES STORAGE
-  Safe add-on only.
-  This keeps recent inbound replies in memory so the Tracker can display them.
-  Note: this resets if Render restarts or redeploys.
+================================================
+PHASE 2 MESSAGE STORAGE
+================================================
+Stores BOTH:
+- inbound replies
+- outbound sent messages
+
+IMPORTANT:
+This is temporary memory storage only.
+Messages reset if Render restarts/redeploys.
+================================================
 */
-const inboundMessages = [];
+
+let messages = [];
 
 app.get("/", (req, res) => {
   res.send("Tracker SMS bridge is running.");
 });
+
+/*
+================================================
+GET ALL MESSAGES
+================================================
+*/
+
+app.get("/messages", (req, res) => {
+  res.json({
+    success: true,
+    messages
+  });
+});
+
+/*
+================================================
+SEND SMS
+================================================
+*/
 
 app.post("/send-sms", async (req, res) => {
   try {
@@ -43,6 +70,21 @@ app.post("/send-sms", async (req, res) => {
       to
     });
 
+    /*
+    ================================================
+    SAVE OUTBOUND MESSAGE
+    ================================================
+    */
+
+    messages.unshift({
+      direction: "outbound",
+      from: process.env.TWILIO_NUMBER,
+      to,
+      body: message,
+      messageSid: msg.sid,
+      receivedAt: new Date().toISOString()
+    });
+
     res.json({
       success: true,
       sid: msg.sid
@@ -56,20 +98,30 @@ app.post("/send-sms", async (req, res) => {
   }
 });
 
+/*
+================================================
+INBOUND SMS WEBHOOK
+================================================
+*/
+
 app.post("/incoming-sms", (req, res) => {
+
   console.log("INBOUND SMS:", req.body);
 
-  inboundMessages.unshift({
-    from: req.body.From || "",
-    to: req.body.To || "",
-    body: req.body.Body || "",
-    messageSid: req.body.MessageSid || "",
+  /*
+  ================================================
+  SAVE INBOUND MESSAGE
+  ================================================
+  */
+
+  messages.unshift({
+    direction: "inbound",
+    from: req.body.From,
+    to: req.body.To,
+    body: req.body.Body,
+    messageSid: req.body.MessageSid,
     receivedAt: new Date().toISOString()
   });
-
-  if (inboundMessages.length > 100) {
-    inboundMessages.length = 100;
-  }
 
   const twiml = new twilio.twiml.MessagingResponse();
 
@@ -79,13 +131,6 @@ app.post("/incoming-sms", (req, res) => {
 
   res.type("text/xml");
   res.send(twiml.toString());
-});
-
-app.get("/messages", (req, res) => {
-  res.json({
-    success: true,
-    messages: inboundMessages
-  });
 });
 
 const port = process.env.PORT || 3000;
