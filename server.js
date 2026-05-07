@@ -124,7 +124,7 @@ INBOUND SMS WEBHOOK
 ================================================
 */
 
-app.post("/incoming-sms", (req, res) => {
+app.post("/incoming-sms", async (req, res) => {
 
   console.log("INBOUND SMS:", req.body);
 
