@@ -2,7 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const twilio = require("twilio");
-
+const { createClient } = require("@supabase/supabase-js");
 const app = express();
 
 app.use(cors());
@@ -13,7 +13,10 @@ const client = twilio(
   process.env.TWILIO_SID,
   process.env.TWILIO_AUTH
 );
-
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 /*
 ================================================
 PHASE 2 MESSAGE STORAGE
@@ -84,7 +87,24 @@ app.post("/send-sms", async (req, res) => {
       messageSid: msg.sid,
       receivedAt: new Date().toISOString()
     });
+    try {
+      const { error: dbError } = await supabase
+        .from("messages")
+        .insert({
+          direction: "outbound",
+          from_number: process.env.TWILIO_NUMBER,
+          to_number: to,
+          body: message,
+          message_sid: msg.sid,
+          received_at: new Date().toISOString()
+        });
 
+      if (dbError) {
+        console.error("SUPABASE OUTBOUND SAVE ERROR:", dbError);
+      }
+    } catch (dbCatchError) {
+      console.error("SUPABASE OUTBOUND SAVE FAILED:", dbCatchError.message);
+    }
     res.json({
       success: true,
       sid: msg.sid
@@ -122,7 +142,24 @@ app.post("/incoming-sms", (req, res) => {
     messageSid: req.body.MessageSid,
     receivedAt: new Date().toISOString()
   });
+  try {
+    const { error: dbError } = await supabase
+      .from("messages")
+      .insert({
+        direction: "inbound",
+        from_number: req.body.From,
+        to_number: req.body.To,
+        body: req.body.Body,
+        message_sid: req.body.MessageSid,
+        received_at: new Date().toISOString()
+      });
 
+    if (dbError) {
+      console.error("SUPABASE INBOUND SAVE ERROR:", dbError);
+    }
+  } catch (dbCatchError) {
+    console.error("SUPABASE INBOUND SAVE FAILED:", dbCatchError.message);
+  }
   const twiml = new twilio.twiml.MessagingResponse();
 
   twiml.message(
