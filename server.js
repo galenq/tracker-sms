@@ -14,6 +14,14 @@ const client = twilio(
   process.env.TWILIO_AUTH
 );
 
+/*
+  PHASE 1 INBOUND REPLIES STORAGE
+  Safe add-on only.
+  This keeps recent inbound replies in memory so the Tracker can display them.
+  Note: this resets if Render restarts or redeploys.
+*/
+const inboundMessages = [];
+
 app.get("/", (req, res) => {
   res.send("Tracker SMS bridge is running.");
 });
@@ -51,6 +59,18 @@ app.post("/send-sms", async (req, res) => {
 app.post("/incoming-sms", (req, res) => {
   console.log("INBOUND SMS:", req.body);
 
+  inboundMessages.unshift({
+    from: req.body.From || "",
+    to: req.body.To || "",
+    body: req.body.Body || "",
+    messageSid: req.body.MessageSid || "",
+    receivedAt: new Date().toISOString()
+  });
+
+  if (inboundMessages.length > 100) {
+    inboundMessages.length = 100;
+  }
+
   const twiml = new twilio.twiml.MessagingResponse();
 
   twiml.message(
@@ -59,6 +79,13 @@ app.post("/incoming-sms", (req, res) => {
 
   res.type("text/xml");
   res.send(twiml.toString());
+});
+
+app.get("/messages", (req, res) => {
+  res.json({
+    success: true,
+    messages: inboundMessages
+  });
 });
 
 const port = process.env.PORT || 3000;
