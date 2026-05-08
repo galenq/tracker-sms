@@ -43,11 +43,35 @@ GET ALL MESSAGES
 ================================================
 */
 
-app.get("/messages", (req, res) => {
-  res.json({
-    success: true,
-    messages
-  });
+app.get("/messages", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("SUPABASE READ ERROR:", error);
+
+      return res.json({
+        success: true,
+        messages
+      });
+    }
+
+    res.json({
+      success: true,
+      messages: data
+    });
+
+  } catch (err) {
+    console.error("MESSAGES ROUTE ERROR:", err);
+
+    res.json({
+      success: true,
+      messages
+    });
+  }
 });
 
 /*
