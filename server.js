@@ -243,6 +243,37 @@ app.post("/save-location", async (req, res) => {
     });
   }
 });
+app.get("/locations", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("locations")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(25);
+
+    if (error) {
+      console.error("LOCATION READ ERROR:", error);
+
+      return res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      locations: data
+    });
+
+  } catch (err) {
+    console.error("LOCATIONS ROUTE ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
 app.listen(port, () => {
   console.log("Tracker SMS bridge running on port " + port);
 });
