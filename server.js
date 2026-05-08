@@ -195,7 +195,54 @@ app.post("/incoming-sms", async (req, res) => {
 });
 
 const port = process.env.PORT || 3000;
+app.post("/save-location", async (req, res) => {
+  try {
+    const {
+      phone_number,
+      driver_name,
+      latitude,
+      longitude,
+      location_label,
+      map_link,
+      status
+    } = req.body;
 
+    const { error } = await supabase
+      .from("locations")
+      .insert([
+        {
+          phone_number,
+          driver_name,
+          latitude,
+          longitude,
+          location_label,
+          map_link,
+          status
+        }
+      ]);
+
+    if (error) {
+      console.error("LOCATION SAVE ERROR:", error);
+
+      return res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+
+    res.json({
+      success: true
+    });
+
+  } catch (err) {
+    console.error("SAVE LOCATION ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
 app.listen(port, () => {
   console.log("Tracker SMS bridge running on port " + port);
 });
