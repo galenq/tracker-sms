@@ -300,6 +300,39 @@ app.post("/save-location", async (req, res) => {
     });
   }
 });
+
+app.get("/media-messages", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("media_messages")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.error("MEDIA MESSAGES READ ERROR:", error);
+
+      return res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      media_messages: data
+    });
+
+  } catch (err) {
+    console.error("MEDIA MESSAGES ROUTE ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
 app.get("/locations", async (req, res) => {
   try {
     const { data, error } = await supabase
