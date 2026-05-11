@@ -144,13 +144,13 @@ app.post("/send-sms", async (req, res) => {
 
 /*
 ================================================
-INBOUND SMS WEBHOOK
+INBOUND SMS / MMS WEBHOOK
 ================================================
 */
 
 app.post("/incoming-sms", async (req, res) => {
 
-  console.log("INBOUND SMS:", req.body);
+  console.log("INBOUND SMS/MMS:", req.body);
 
   /*
   ================================================
@@ -166,6 +166,7 @@ app.post("/incoming-sms", async (req, res) => {
     messageSid: req.body.MessageSid,
     receivedAt: new Date().toISOString()
   });
+
   try {
     const { error: dbError } = await supabase
       .from("messages")
@@ -184,6 +185,63 @@ app.post("/incoming-sms", async (req, res) => {
   } catch (dbCatchError) {
     console.error("SUPABASE INBOUND SAVE FAILED:", dbCatchError.message);
   }
+
+  /*
+  ================================================
+  SAVE INBOUND MMS / DOCUMENTS
+  ================================================
+  */
+
+  try {
+    const numMedia = parseInt(req.body.NumMedia || "0", 10);
+
+    if (numMedia > 0) {
+      for (let i = 0; i < numMedia; i++) {
+        const mediaUrl = req.body[`MediaUrl${i}`];
+        const mediaContentType = req.body[`MediaContentType${i}`];
+
+        let documentType = "Other Document";
+
+        const bodyText = (req.body.Body || "").toLowerCase();
+
+        if (bodyText.includes("pod")) {
+          documentType = "POD";
+        } else if (bodyText.includes("bol")) {
+          documentType = "BOL";
+        } else if (bodyText.includes("lumper")) {
+          documentType = "Lumper Receipt";
+        } else if (bodyText.includes("invoice")) {
+          documentType = "Invoice";
+        } else if (bodyText.includes("damage")) {
+          documentType = "Damage Photo";
+        } else if (mediaContentType && mediaContentType.startsWith("image/")) {
+          documentType = "Photo";
+        }
+
+        const { error: mediaError } = await supabase
+          .from("media_messages")
+          .insert({
+            direction: "inbound",
+            from_number: req.body.From,
+            to_number: req.body.To,
+            body: req.body.Body,
+            message_sid: req.body.MessageSid,
+            media_url: mediaUrl,
+            media_content_type: mediaContentType,
+            media_index: String(i),
+            document_type: documentType,
+            status: "received"
+          });
+
+        if (mediaError) {
+          console.error("SUPABASE MMS SAVE ERROR:", mediaError);
+        }
+      }
+    }
+  } catch (mediaCatchError) {
+    console.error("SUPABASE MMS SAVE FAILED:", mediaCatchError.message);
+  }
+
   const twiml = new twilio.twiml.MessagingResponse();
 
   twiml.message(
@@ -193,7 +251,6 @@ app.post("/incoming-sms", async (req, res) => {
   res.type("text/xml");
   res.send(twiml.toString());
 });
-
 const port = process.env.PORT || 3000;
 app.post("/save-location", async (req, res) => {
   try {
