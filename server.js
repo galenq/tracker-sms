@@ -333,6 +333,47 @@ app.get("/media-messages", async (req, res) => {
   }
 });
 
+app.get("/media-file", async (req, res) => {
+  try {
+    const mediaUrl = req.query.url;
+
+    if (!mediaUrl) {
+      return res.status(400).send("Missing media URL.");
+    }
+
+    if (!mediaUrl.startsWith("https://api.twilio.com/")) {
+      return res.status(400).send("Invalid media URL.");
+    }
+
+    const response = await fetch(mediaUrl, {
+      headers: {
+        Authorization:
+          "Basic " +
+          Buffer.from(
+            process.env.TWILIO_SID + ":" + process.env.TWILIO_AUTH
+          ).toString("base64")
+      }
+    });
+
+    if (!response.ok) {
+      console.error("TWILIO MEDIA FETCH ERROR:", response.status);
+      return res.status(response.status).send("Could not load media file.");
+    }
+
+    const contentType = response.headers.get("content-type") || "application/octet-stream";
+    const buffer = await response.arrayBuffer();
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.send(Buffer.from(buffer));
+
+  } catch (err) {
+    console.error("MEDIA FILE ROUTE ERROR:", err);
+
+    res.status(500).send("Media file route failed.");
+  }
+});
+
 app.get("/locations", async (req, res) => {
   try {
     const { data, error } = await supabase
