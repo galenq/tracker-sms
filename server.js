@@ -405,6 +405,20 @@ app.get("/locations", async (req, res) => {
     });
   }
 });
+
+/* BEGIN USTD JACK MESSAGES CANDIDATE — OFF BY DEFAULT */
+if (process.env.USTD_JACK_MESSAGES_ENABLED === "true") {
+  import("./SERVER_CANDIDATE/render-integration.mjs").then(({mountExistingTrackerServer}) =>
+    mountExistingTrackerServer({app,client,supabase,twilio,createClient,env:process.env,
+      recordOutbound: async row => {
+        messages.unshift({direction:"outbound",from:process.env.TWILIO_NUMBER,...row});
+        const {error}=await supabase.from("messages").insert({direction:"outbound",from_number:process.env.TWILIO_NUMBER,to_number:row.to,body:row.body,message_sid:row.messageSid,received_at:row.receivedAt});
+        if(error)throw Error("OUTBOUND_HISTORY_SAVE_FAILED");
+      }
+    })
+  ).catch(() => console.error("Jack message routes unavailable; existing SMS routes unchanged."));
+}
+/* END USTD JACK MESSAGES CANDIDATE */
 app.listen(port, () => {
   console.log("Tracker SMS bridge running on port " + port);
 });
