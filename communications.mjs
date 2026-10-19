@@ -1,3 +1,4 @@
+import {validateAttachments} from './attachments.mjs';
 // Isolated candidate. No imports, network calls, timers, Twilio configuration or installation.
 const clone=v=>JSON.parse(JSON.stringify(v));
 const exact=(v,keys)=>v&&Object.getPrototypeOf(v)===Object.prototype&&Object.keys(v).sort().join(',')===keys.split(',').sort().join(',');
@@ -12,9 +13,14 @@ export async function proposeMessage(current,input){
  requireThat(exact(input,'kind,body')&&input.kind==='SEND_SMS','MESSAGE_ACTION_NOT_SUPPORTED');
  return {kind:'SEND_SMS',binding:binding(current),body:safeBody(input.body)};
 }
+export async function messageIntent(p){return fingerprint(p.kind==='SEND_MMS'?{...p,attachments:p.attachments.map(f=>({sha256:f.sha256,size:f.size,contentType:f.contentType})).sort((a,b)=>a.sha256.localeCompare(b.sha256))}:p);}
+export async function proposeMMS(current,input){
+ requireThat(exact(input,'kind,body,attachments')&&input.kind==='SEND_MMS','MESSAGE_ACTION_NOT_SUPPORTED');
+ return {kind:'SEND_MMS',binding:binding(current),body:safeBody(input.body),attachments:validateAttachments(input.attachments)};
+}
 export function locationText(current){const b=binding(current),q=new URLSearchParams({location:'1',phone:b.recipient,status:'GPS location requested by dispatch'});return ['U.S. Truck Dispatch location check-in request:','Please tap this link and choose Share My Location:','https://tracker.ustruckdispatch.com/?'+q.toString(),'Reply STOP to unsubscribe.'].join('\n');}
 export function proposeLocation(current){return {kind:'REQUEST_LOCATION',binding:binding(current),body:locationText(current)};}
-function validateProposal(p){requireThat(exact(p,'kind,binding,body')&&['SEND_SMS','REQUEST_LOCATION'].includes(p.kind),'MESSAGE_ACTION_NOT_SUPPORTED');const b=binding(p.binding);if(p.kind==='REQUEST_LOCATION')requireThat(p.body===locationText(b),'LOCATION_REQUEST_CHANGED');else safeBody(p.body);return {kind:p.kind,binding:b,body:p.body};}
+function validateProposal(p){if(p?.kind==='SEND_MMS'){requireThat(exact(p,'kind,binding,body,attachments'),'MESSAGE_ACTION_NOT_SUPPORTED');return {kind:'SEND_MMS',binding:binding(p.binding),body:safeBody(p.body),attachments:validateAttachments(p.attachments)};}requireThat(exact(p,'kind,binding,body')&&['SEND_SMS','REQUEST_LOCATION'].includes(p.kind),'MESSAGE_ACTION_NOT_SUPPORTED');const b=binding(p.binding);if(p.kind==='REQUEST_LOCATION')requireThat(p.body===locationText(b),'LOCATION_REQUEST_CHANGED');else safeBody(p.body);return {kind:p.kind,binding:b,body:p.body};}
 
 // No automatic retry: existing /send-sms has no proven idempotency contract.
 // An uncertain result remains blocked for reconciliation, across page reloads.
@@ -27,7 +33,7 @@ export function createMessageReview({readBinding,journal,sendApproved,now=()=>Da
    requireThat(issued&&now()<=issued.expiresAt&&await fingerprint(view)===await fingerprint(issued),'FRESH_OWNER_APPROVAL_REQUIRED');
    requireThat(!await journal.read(),'SETTLE_PREVIOUS_MESSAGE_FIRST');
    const current=binding(await readBinding());requireThat(await fingerprint(current)===await fingerprint(issued.proposal.binding),'TRUCK_OR_LOAD_CHANGED');
-   const request={id:issued.reviewId,intentHash:await fingerprint(issued.proposal),proposal:clone(issued.proposal),state:'PENDING_CONFIRMATION',approvedAt:new Date(now()).toISOString()};
+   const request={id:issued.reviewId,intentHash:await messageIntent(issued.proposal),proposal:clone(issued.proposal),state:'PENDING_CONFIRMATION',approvedAt:new Date(now()).toISOString()};
    requireThat(await journal.reserve(request)===true,'SETTLE_PREVIOUS_MESSAGE_FIRST');issued=null; // Atomic durable claim, including across tabs, before any send.
    if(await fingerprint(binding(await readBinding()))!==await fingerprint(request.proposal.binding)){
     await journal.archive({...request,state:'CANCELLED_BEFORE_SEND'});await journal.clear(request.id);throw Error('TRUCK_OR_LOAD_CHANGED');

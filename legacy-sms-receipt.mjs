@@ -3,7 +3,7 @@
 export function legacySMSReceipt(httpStatus, body) {
  if (!Number.isInteger(httpStatus) || httpStatus < 200 || httpStatus >= 300 ||
      !body || typeof body !== 'object' || Array.isArray(body) ||
-     body.success !== true || typeof body.sid !== 'string' || !/^SM[a-fA-F0-9]{32}$/.test(body.sid)) {
+     body.success !== true || typeof body.sid !== 'string' || !/^(SM|MM)[a-fA-F0-9]{32}$/.test(body.sid)) {
   return {accepted:false, uncertain:true, retryAllowed:false};
  }
  return {accepted:true, messageId:body.sid, deliveryConfirmed:false, retryAllowed:false};

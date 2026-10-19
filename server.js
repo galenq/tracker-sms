@@ -409,7 +409,7 @@ app.get("/locations", async (req, res) => {
 /* BEGIN USTD JACK MESSAGES CANDIDATE — OFF BY DEFAULT */
 if (process.env.USTD_JACK_MESSAGES_ENABLED === "true") {
   import("./SERVER_CANDIDATE/render-integration.mjs").then(({mountExistingTrackerServer}) =>
-    mountExistingTrackerServer({app,client,supabase,twilio,createClient,env:process.env,
+    mountExistingTrackerServer({attachmentBodyParser:express.raw({type:["image/png","image/jpeg","application/pdf"],limit:"4mb"}),app,client,supabase,twilio,createClient,env:process.env,
       recordOutbound: async row => {
         messages.unshift({direction:"outbound",from:process.env.TWILIO_NUMBER,...row});
         const {error}=await supabase.from("messages").insert({direction:"outbound",from_number:process.env.TWILIO_NUMBER,to_number:row.to,body:row.body,message_sid:row.messageSid,received_at:row.receivedAt});
