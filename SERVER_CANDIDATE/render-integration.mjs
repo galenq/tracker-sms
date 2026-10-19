@@ -3,6 +3,8 @@ import {createSupabaseMessageStore} from './supabase-store.mjs';
 import {createTwilioMessageSender,createTwilioStatusHandler} from './twilio-receipts.mjs';
 import {mountApprovedMessageRoutes} from './http-routes.mjs';
 import {prepare} from '../CONNECTOR_CANDIDATE/ustd-jack-mcp/operational-codec.mjs';
+import {createOwnerUpdateService} from './owner-update-service.mjs';
+import {mountOwnerUpdateRoutes} from './owner-update-routes.mjs';
 const OWNER='f3208b50-b621-444e-a048-76c889a38acc',PROJECT='https://ajayrismmiwgybtezisf.supabase.co';
 const PUBLISHABLE_KEY='sb_publishable_GaQyB2O9sLQU0ejMyBO6Cg_VPukAWwv';
 const endpoint=PROJECT+'/functions/v1/tracker-live-secure-bridge?scope=protected-full-state-v1';
@@ -25,5 +27,10 @@ export async function mountExistingTrackerServer({app,client,supabase,twilio,cre
  const sendOnce=async(body,approval)=>{const result=await providerSend(body,approval);try{if(result.body?.success===true)await recordOutbound?.({to:body.to,body:body.message,messageSid:result.body.sid,receivedAt:new Date().toISOString()});}catch(_){/* Provider acceptance remains true; the protected journal retains the SID. */}return result;};
  const service=createApprovedMessageService({verifyUser,readCanonical,store,sendOnce,isSendingEnabled:()=>env.USTD_JACK_MESSAGE_SEND_ENABLED==='true'});
  const statusHandler=createTwilioStatusHandler({validateRequest:twilio.validateRequest,authToken:env.TWILIO_AUTH,accountSid:env.TWILIO_SID,from:env.TWILIO_NUMBER,store});
- mountApprovedMessageRoutes({app,service,statusHandler});return {enabled:true};
+ mountApprovedMessageRoutes({app,service,statusHandler});
+ if(env.USTD_JACK_OWNER_PHONE||env.USTD_JACK_OWNER_UPDATES_ENABLED==='true'){
+  const ownerUpdates=createOwnerUpdateService({verifyUser,readCanonical,store,sendOnce,ownerRecipient:env.USTD_JACK_OWNER_PHONE,isSendingEnabled:()=>env.USTD_JACK_MESSAGE_SEND_ENABLED==='true'&&env.USTD_JACK_OWNER_UPDATES_ENABLED==='true'});
+  mountOwnerUpdateRoutes({app,service:ownerUpdates});
+ }
+ return {enabled:true};
 }

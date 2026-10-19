@@ -8,16 +8,16 @@ const need=(ok,reason)=>{if(!ok)throw Error(reason);};
 const clone=x=>JSON.parse(JSON.stringify(x));
 // Network and persistence adapters must be explicitly injected by an authenticated server.
 // This module is NOT registered in any deployed function or Render route.
-export function createApprovedMessageService({verifyUser,readCanonical,store,sendOnce,readProviderReceipt,isSendingEnabled=()=>true}){
+export function createApprovedMessageService({verifyUser,readCanonical,store,sendOnce,readProviderReceipt,isSendingEnabled=()=>true,bindingFromCanonical=bindingFromTracker,newReviewId=()=>crypto.randomUUID()}){
  const owner=async token=>need((await verifyUser(token))?.id===OWNER,'OWNER_REQUIRED');
- async function current(token,proposal){await owner(token);const c=await readCanonical(token);const packed=await prepare(c.snapshot);need(packed.checksum===c.checksum,'VERIFIED_CANONICAL_READ_REQUIRED');const b=await bindingFromTracker(c,proposal.binding.truckId);need(await fingerprint(b)===await fingerprint(proposal.binding),'TRUCK_OR_LOAD_CHANGED');return b;}
+ async function current(token,proposal){await owner(token);const c=await readCanonical(token);const packed=await prepare(c.snapshot);need(packed.checksum===c.checksum,'VERIFIED_CANONICAL_READ_REQUIRED');const b=await bindingFromCanonical(c,proposal.binding.truckId);need(await fingerprint(b)===await fingerprint(proposal.binding),'TRUCK_OR_LOAD_CHANGED');return b;}
  const output=r=>({reviewId:r.id,reviewHash:r.review_hash,proposal:clone(r.proposal),expiresAt:r.expires_at,ownerApprovalRequired:true,sent:false,sendingEnabled:isSendingEnabled()===true});
  return {
   async review(token,proposal){
    need(exact(proposal,'kind,binding,body'),'MESSAGE_ACTION_NOT_SUPPORTED');
    const b=await current(token,proposal);let p;if(proposal.kind==='SEND_SMS')p=await proposeMessage(b,{kind:'SEND_SMS',body:proposal.body});else{need(proposal.kind==='REQUEST_LOCATION','MESSAGE_ACTION_NOT_SUPPORTED');p=proposeLocation(b);}
    need(await fingerprint(p)===await fingerprint(proposal),'MESSAGE_REVIEW_CHANGED');
-   const id=crypto.randomUUID(),reviewHash=await fingerprint([id,p]);
+   const id=newReviewId(),reviewHash=await fingerprint([id,p]);
    // Server-computed intent hash prevents alternate review IDs bypassing duplicate protection.
    const row=await store.create({id,owner_id:OWNER,truck_id:b.truckId,intent_hash:await fingerprint(p),review_hash:reviewHash,proposal:p});
    return output(row);
