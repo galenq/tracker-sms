@@ -13,7 +13,7 @@ export async function mountExistingTrackerServer({app,client,supabase,twilio,cre
  const authClient=createClient(PROJECT,PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
  const verifyUser=async token=>{const r=await authClient.auth.getUser(token);return r.error?null:r.data?.user;};
  async function readCanonical(token){
-  const headers={authorization:'Bearer '+token,'content-type':'application/json'};
+  const headers={authorization:'Bearer '+token,'content-type':'application/json',origin:'https://tracker.ustruckdispatch.com'};
   const capability=await fetchImpl(endpoint,{method:'GET',headers}),cap=await capability.json();
   if(!capability.ok||cap.protocol!=='USTD_FULL_STATE_CAS_V1'||cap.environment!=='PRODUCTION'||cap.owner_user_id!==OWNER||cap.ready!==true)throw Error('VERIFIED_CANONICAL_READ_REQUIRED');
   const response=await fetchImpl(endpoint,{method:'POST',headers,body:JSON.stringify({operation:'READ_FULL',protocol:'USTD_FULL_STATE_CAS_V1',verify_field_command:{protocol:'USTD_FULL_STATE_CAS_V1'}})}),row=await response.json();
